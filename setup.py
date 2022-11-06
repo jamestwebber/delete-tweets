@@ -15,7 +15,7 @@ setuptools.setup(
     packages=["deletetweets"],
     install_requires=[
         "python-twitter>=3.5,<4",
-        "python-dateutil>=2.8.1,<3"
+        "python-dateutil>=2.8.2,<3"
     ],
     entry_points={
         "console_scripts": [
