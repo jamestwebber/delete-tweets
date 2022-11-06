@@ -24,7 +24,7 @@ in order to create a Twitter app.
       you want to create an app to semi-automatically clean up your own tweets.
     1. **Terms of service**: Read and accept the terms.
     1. **Email verification**: Confirm your email address.
-1. Now wait for your Twitter Developer account to be reviewed and approved.
+1. Now wait for your Twitter Developer account to be reviewed and approved (in my case this appeared to happen automatically, super good security over there).
 
 ### Create a Twitter app
 
@@ -37,19 +37,17 @@ in order to create a Twitter app.
 1. Open your Twitter Developer's [apps](https://developer.twitter.com/en/apps).
 1. Click the 'Details' button next to your newly created app.
 1. Click the 'Keys and tokens' tab, and find your keys, secret keys and access tokens.
-1. Now you need to make these keys and tokens available to your shell environment.
-  Assuming you are using [Bash](https://en.wikipedia.org/wiki/Bash_(Unix_shell)):
+1. Put these keys in a file called `credentials.json` (or whatever you want) like so:
 
-:warning: Before you continue, you should be aware that most shells record user
-input (and thus secrets) into a history file. In Bash you could prevent this by
-prepending your command with a _single space_ (requires `$HISTCONTROL` to be set
-to `ignorespace` or `ignoreboth`).
+:warning: Anyone who has access to this file can use these keys. Make sure you keep it protected.
 
-```bash
-export TWITTER_CONSUMER_KEY="your_consumer_key"
-export TWITTER_CONSUMER_SECRET="your_consumer_secret"
-export TWITTER_ACCESS_TOKEN="your_access_token"
-export TWITTER_ACCESS_TOKEN_SECRET="your_access_token_secret"
+```
+{
+    "consumer_key": "[your consumer key]",
+    "consumer_secret": "[your consumer secret]",
+    "access_token_key": "[your access token]",
+    "access_token_secret": "[your access token secret]"
+}
 ```
 
 ### Get your tweet archive
@@ -76,26 +74,32 @@ python3 -m pip install delete-tweets
 Delete any tweet from _before_ January 1, 2018:
 
 ```bash
-delete-tweets --until 2018-01-01 tweet.js
+delete-tweets delete --until 2018-01-01 tweet.js
 ```
 
 Or only delete all retweets:
 
 ```bash
-delete-tweets --filter retweets tweet.js
+delete-tweets delete --filter retweets tweet.js
 ```
 
 ### Spare tweets
 
-You can optionally spare tweets by passing their `id_str`, setting a minimum
+You can optionally spare tweets by passing a file of `id_str`, setting a minimum
 amount of likes or retweets:
 
 ```bash
-delete-tweets --until 2018-01-01 tweet.js --spare-ids 21235434 23498723 23498723
+delete-tweets delete --until 2018-01-01 tweet.js --spare-ids ids_to_spare.txt
 ```
 
 Spare tweets that have at least 10 likes, or 5 retweets:
 
 ```bash
-delete-tweets --until 2018-01-01 tweet.js --spare-min-likes 10 --spare-min-retweets 5
+delete-tweets delete --until 2018-01-01 tweet.js --spare-min-likes 10 --spare-min-retweets 5
+```
+
+**Note** If you run this once and then want to run it again with the same file, you can use the `--dry-run` output to get the IDs you removed before, with some shell trickery:
+
+```bash
+delete-tweets -v DEBUG delete --dry-run -j tweets.js -u 2018-01-01 --spare-min-likes 10 --spare-min-retweets 5 2>&1 | grep 'delete tweet' | sed 's/.*delete tweet //' > deleted_ids.txt
 ```

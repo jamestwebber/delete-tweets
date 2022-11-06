@@ -1,58 +1,116 @@
 #!/usr/bin/env python
 
-import argparse
-import os
+import json
+import logging
 import sys
+
+import click
+import click_log
 
 from deletetweets import deletetweets
 
-__author__ = "Koen Rouwhorst"
+
+__author__ = "Koen Rouwhorst + James Webber"
 __version__ = "1.0.6"
 
 
+log = logging.getLogger("deletetweets")
+
+
+def create_logger():
+    root_log = logging.getLogger()
+    click_log.basic_config(root_log)
+
+    root_log.handlers[0].setFormatter(
+        logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
+
+
+@click.group()
+@click.option("--config", type=click.Path(), default="credentials.json")
+@click_log.simple_verbosity_option(log, default="WARNING")
+@click.pass_context
+def cli(ctx, config):
+    create_logger()
+    ctx.ensure_object(dict)
+
+    with open(config) as f:
+        ctx.obj["credentials"] = json.load(f)
+
+    if set(ctx.obj["credentials"]) != {
+        "consumer_key",
+        "consumer_secret",
+        "access_token_key",
+        "access_token_secret",
+    }:
+        log.error("Twitter API credentials not set.")
+        sys.exit(1)
+
+    log.debug(f"Loaded credentials from {config}")
+
+
+@cli.command(help="Delete old tweets")
+@click.option(
+    "-j",
+    "--tweetjs-path",
+    required=True,
+    type=click.Path(exists=True),
+    help="The tweet.js file from Twitter data archive",
+)
+@click.option("-s", "--since", type=click.DateTime(), help="Inclusive")
+@click.option("-u", "--until", type=click.DateTime())
+@click.option(
+    "-f",
+    "--filters",
+    multiple=True,
+    type=click.Choice(["reply", "retweet"]),
+    help="Restrict to replies and/or retweets",
+)
+@click.option("--spare-ids", type=click.Path(exists=True))
+@click.option("--spare-min-likes", "min_likes", type=int, default=0)
+@click.option("--spare-min-retweets", "min_rts", type=int, default=0)
+@click.option(
+    "--dry-run", is_flag=True, help="Don't do anything, just see what would happen"
+)
+@click.pass_context
+def delete(
+    ctx,
+    tweetjs_path,
+    since=None,
+    until=None,
+    filters=None,
+    spare_ids=None,
+    min_likes=0,
+    min_rts=0,
+    dry_run=False,
+):
+    if spare_ids is not None:
+        with open(spare_ids) as fh:
+            spare_ids = {line.strip() for line in fh}
+        log.debug(f"Loaded {len(spare_ids)}")
+    else:
+        spare_ids = set()
+
+    filters = set(filters) if filters is not None else set()
+
+    deletetweets.delete(
+        ctx.obj["credentials"],
+        tweetjs_path,
+        since,
+        until,
+        filters,
+        spare_ids,
+        min_likes,
+        min_rts,
+        dry_run,
+    )
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Delete old tweets.")
-    parser.add_argument("--since", dest="since_date", help="Delete tweets since this date")
-    parser.add_argument("--until", dest="until_date", help="Delete tweets until this date")
-    parser.add_argument("--filter", action="append", dest="filters", choices=["replies", "retweets"],
-                        help="Filter replies or retweets", default=[])
-    parser.add_argument("file", help="Path to the tweet.js file",
-                        type=str)
-    parser.add_argument("--spare-ids", dest="spare_ids", help="A list of tweet ids to spare",
-                        type=str, nargs="+", default=[])
-    parser.add_argument("--spare-min-likes", dest="min_likes",
-                        help="Spare tweets with more than the provided likes", type=int, default=0)
-    parser.add_argument("--spare-min-retweets", dest="min_retweets",
-                        help="Spare tweets with more than the provided retweets", type=int, default=0)
-    parser.add_argument("--dry-run", dest="dry_run", action="store_true", default=False)
-    parser.add_argument('--version', action='version', version='%(prog)s ' + __version__)
-
-    # legacy options
-    parser.add_argument("-d", dest="until_date", help=argparse.SUPPRESS)
-    parser.add_argument("-r", dest="restrict", choices=["reply", "retweet"], help=argparse.SUPPRESS)
-
-    args = parser.parse_args()
-
-    if not ("TWITTER_CONSUMER_KEY" in os.environ and
-            "TWITTER_CONSUMER_SECRET" in os.environ and
-            "TWITTER_ACCESS_TOKEN" in os.environ and
-            "TWITTER_ACCESS_TOKEN_SECRET" in os.environ):
-        sys.stderr.write("Twitter API credentials not set.\n")
-        exit(1)
-
-    filters = []
-
-    if args.restrict == "reply":
-        filters.append("replies")
-    elif args.restrict == "retweet":
-        filters.append("retweets")
-
-    for f in args.filters:
-        if f not in filters:
-            filters.append(f)
-
-    deletetweets.delete(args.file, args.since_date, args.until_date, filters, args.spare_ids,
-                        args.min_likes, args.min_retweets, args.dry_run)
+    cli(obj={})
 
 
 if __name__ == "__main__":
